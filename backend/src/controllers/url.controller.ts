@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import { Request, Response } from "express";
 import validator from "validator";
 import Analytics from "../models/analytics.model";
+import geoip from "geoip-lite";
 
 export const createShortUrl = async (
   req: Request,
@@ -91,10 +92,13 @@ export const redirectToOriginalUrl = async (
         ? req.headers["user-agent"]
         : "Unknown";
 
+    const geo = ip !== "Unknown" ? geoip.lookup(ip) : null;
+    const country = geo ? geo.country : "Unknown";
+
     await Analytics.create({
         shortCode,
         ip,
-        country: "Unknown",
+        country,
         userAgent
     })
         
