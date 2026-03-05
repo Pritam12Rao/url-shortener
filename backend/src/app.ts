@@ -1,7 +1,7 @@
 import express from "express";
 import { Request, Response } from "express";
 import urlRoutes from "./routes/url.routes";
-import Url from "./models/url.models";
+import Url from "./models/url.model";
 import { redirectToOriginalUrl } from "./controllers/url.controller";
 
 const app = express();
