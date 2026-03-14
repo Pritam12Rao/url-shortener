@@ -140,10 +140,18 @@ export const getUrlAnalytics = async (
       clicks: item.clicks,
     }));
 
+    const recentClicks = await Analytics.find({ shortCode })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .select("ip country userAgent createdAt");
+
+    
+
     res.status(200).json({
       shortCode,
       totalClicks,
       topCountries: formattedCountries,
+      recentClicks,
     });
   } catch (error) {
     console.error("Analytics fetch error:", error);
