@@ -108,3 +108,29 @@ export const redirectToOriginalUrl = async (
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+export const getUrlAnalytics = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { shortCode } = req.params;
+
+    if (typeof shortCode !== "string") {
+      res.status(400).json({ message: "Invalid short code" });
+      return;
+    }
+
+    const totalClicks = await Analytics.countDocuments({ shortCode });
+
+    res.status(200).json({
+      shortCode,
+      totalClicks,
+    });
+
+    
+  } catch (error) {
+    console.error("Analytics fetch error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
