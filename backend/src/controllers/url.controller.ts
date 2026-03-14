@@ -123,12 +123,28 @@ export const getUrlAnalytics = async (
 
     const totalClicks = await Analytics.countDocuments({ shortCode });
 
+    const topCountries = await Analytics.aggregate([
+      { $match: { shortCode } },
+      {
+        $group: {
+          _id: "$country",
+          clicks: { $sum: 1 },
+        },
+      },
+      { $sort: { clicks: -1 } },
+      { $limit: 5 },
+    ]);
+
+    const formattedCountries = topCountries.map((item) => ({
+      country: item._id,
+      clicks: item.clicks,
+    }));
+
     res.status(200).json({
       shortCode,
       totalClicks,
+      topCountries: formattedCountries,
     });
-
-    
   } catch (error) {
     console.error("Analytics fetch error:", error);
     res.status(500).json({ message: "Internal Server Error" });
