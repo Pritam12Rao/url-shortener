@@ -11,7 +11,7 @@ export const createShortUrl = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { originalUrl } = req.body;
+    const { originalUrl, customCode } = req.body;
 
     if (!originalUrl) {
       res.status(400).json({ message: "Original URL is required" });
@@ -36,13 +36,28 @@ export const createShortUrl = async (
       return;
     }
 
-    let shortCode = nanoid(7);
+    let shortCode: string;
 
-    let shortCodeExists = await Url.findOne({ shortCode });
+    // 🔥 Custom code logic
+    if (customCode) {
+      const existing = await Url.findOne({ shortCode: customCode });
 
-    while (shortCodeExists) {
+      if (existing) {
+        res.status(400).json({ message: "Custom code already in use" });
+        return;
+      }
+
+      shortCode = customCode;
+    } else {
+      // 🔥 Existing nanoid logic with collision handling
       shortCode = nanoid(7);
-      shortCodeExists = await Url.findOne({ shortCode });
+
+      let shortCodeExists = await Url.findOne({ shortCode });
+
+      while (shortCodeExists) {
+        shortCode = nanoid(7);
+        shortCodeExists = await Url.findOne({ shortCode });
+      }
     }
 
     const newUrl = await Url.create({
