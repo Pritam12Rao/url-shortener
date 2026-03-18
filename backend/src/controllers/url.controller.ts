@@ -11,7 +11,7 @@ export const createShortUrl = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { originalUrl, customCode } = req.body;
+    const { originalUrl, customCode, expiresAt } = req.body;
 
     if (!originalUrl) {
       res.status(400).json({ message: "Original URL is required" });
@@ -21,6 +21,25 @@ export const createShortUrl = async (
     if (!validator.isURL(originalUrl, { require_protocol: true })) {
       res.status(400).json({ message: "Invalid URL format" });
       return;
+    }
+
+    // 🔥 Validate expiresAt
+    let expiryDate: Date | undefined;
+
+    if (expiresAt) {
+      const parsedDate = new Date(expiresAt);
+
+      if (isNaN(parsedDate.getTime())) {
+        res.status(400).json({ message: "Invalid expiration date" });
+        return;
+      }
+
+      if (parsedDate <= new Date()) {
+        res.status(400).json({ message: "Expiration must be in the future" });
+        return;
+      }
+
+      expiryDate = parsedDate;
     }
 
     const existingUrl = await Url.findOne({ originalUrl });
@@ -49,7 +68,7 @@ export const createShortUrl = async (
 
       shortCode = customCode;
     } else {
-      // 🔥 Existing nanoid logic with collision handling
+      // 🔥 nanoid with collision handling
       shortCode = nanoid(7);
 
       let shortCodeExists = await Url.findOne({ shortCode });
@@ -63,6 +82,7 @@ export const createShortUrl = async (
     const newUrl = await Url.create({
       originalUrl,
       shortCode,
+      expiresAt: expiryDate, // 🔥 store expiry
     });
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
@@ -70,6 +90,7 @@ export const createShortUrl = async (
     res.status(201).json({
       message: "Short URL created successfully",
       shortUrl: `${baseUrl}/${newUrl.shortCode}`,
+      expiresAt: expiryDate || null,
     });
   } catch (error) {
     console.error("Error creating short URL:", error);
@@ -90,25 +111,43 @@ export const redirectToOriginalUrl = async (
       return;
     }
 
+    // 🔥 Always fetch minimal data to check expiry
+    const urlData = await Url.findOne({ shortCode });
+
+    if (!urlData) {
+      res.status(404).json({ message: "Short URL not found" });
+      return;
+    }
+
+    // 🔥 Expiry check FIRST (before cache, analytics, clicks)
+    if (urlData.expiresAt && urlData.expiresAt < new Date()) {
+      res.status(410).json({ message: "This link has expired" });
+      return;
+    }
+
+    // 🔥 Check Redis cache
     const cachedUrl = await redisClient.get(shortCode);
 
     if (cachedUrl) {
-      // cache hit
       console.log("Cache HIT");
 
-      // still track analytics + clicks
+      // increment clicks
       await Url.updateOne({ shortCode }, { $inc: { clicks: 1 } });
 
+      // analytics
       const ip = req.ip || "Unknown";
       const userAgent =
         typeof req.headers["user-agent"] === "string"
           ? req.headers["user-agent"]
           : "Unknown";
 
+      const geo = ip !== "Unknown" ? geoip.lookup(ip) : null;
+      const country = geo ? geo.country : "Unknown";
+
       await Analytics.create({
         shortCode,
         ip,
-        country: "Unknown",
+        country,
         userAgent,
       });
 
@@ -116,9 +155,10 @@ export const redirectToOriginalUrl = async (
       return;
     }
 
-    // 🔥 2. Cache miss → query DB
+    // 🔥 Cache MISS
     console.log("Cache MISS");
 
+    // increment clicks + get updated doc
     const url = await Url.findOneAndUpdate(
       { shortCode },
       { $inc: { clicks: 1 } },
@@ -130,9 +170,10 @@ export const redirectToOriginalUrl = async (
       return;
     }
 
+    // store in Redis
     await redisClient.set(shortCode, url.originalUrl);
 
-    //capture analytics data
+    // analytics
     const ip = req.ip || "Unknown";
     const userAgent =
       typeof req.headers["user-agent"] === "string"
@@ -143,12 +184,12 @@ export const redirectToOriginalUrl = async (
     const country = geo ? geo.country : "Unknown";
 
     await Analytics.create({
-        shortCode,
-        ip,
-        country,
-        userAgent
-    })
-        
+      shortCode,
+      ip,
+      country,
+      userAgent,
+    });
+
     res.redirect(url.originalUrl);
   } catch (error) {
     console.error("Redirect error:", error);
