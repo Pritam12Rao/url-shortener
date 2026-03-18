@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import validator from "validator";
 import Analytics from "../models/analytics.model";
 import geoip from "geoip-lite";
+import redisClient from "../config/redis";
 
 export const createShortUrl = async (
   req: Request,
@@ -74,6 +75,35 @@ export const redirectToOriginalUrl = async (
       return;
     }
 
+    const cachedUrl = await redisClient.get(shortCode);
+
+    if (cachedUrl) {
+      // cache hit
+      console.log("Cache HIT");
+
+      // still track analytics + clicks
+      await Url.updateOne({ shortCode }, { $inc: { clicks: 1 } });
+
+      const ip = req.ip || "Unknown";
+      const userAgent =
+        typeof req.headers["user-agent"] === "string"
+          ? req.headers["user-agent"]
+          : "Unknown";
+
+      await Analytics.create({
+        shortCode,
+        ip,
+        country: "Unknown",
+        userAgent,
+      });
+
+      res.redirect(cachedUrl);
+      return;
+    }
+
+    // 🔥 2. Cache miss → query DB
+    console.log("Cache MISS");
+
     const url = await Url.findOneAndUpdate(
       { shortCode },
       { $inc: { clicks: 1 } },
@@ -84,6 +114,8 @@ export const redirectToOriginalUrl = async (
       res.status(404).json({ message: "Short URL not found" });
       return;
     }
+
+    await redisClient.set(shortCode, url.originalUrl);
 
     //capture analytics data
     const ip = req.ip || "Unknown";
