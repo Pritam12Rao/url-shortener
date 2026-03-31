@@ -3,38 +3,21 @@ import mongoose, { Schema, Document } from "mongoose";
 export interface IUrl extends Document {
   originalUrl: string;
   shortCode: string;
-  clicks: number;
-  userId?: mongoose.Types.ObjectId;
   createdAt: Date;
-  updatedAt: Date;
-  expiresAt?: Date;
+  clicks: number;
+  userId?: string;
+  expiresAt?: Date; // ✅ IMPORTANT
 }
 
 const urlSchema = new Schema<IUrl>({
-  originalUrl: {
-    type: String,
-    required: true,
-  },
-  shortCode: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  clicks: {
-    type: Number,
-    default: 0,
-  },
-  userId: {
-    type: Schema.Types.ObjectId,
-    ref: "User",
-    required: false,
-  },
-  expiresAt: {
-    type: Date,
-    required: false,
-  }
-} , {timestamps: true});
+  originalUrl: { type: String, required: true },
+  shortCode: { type: String, required: true, unique: true },
+  createdAt: { type: Date, default: Date.now },
+  clicks: { type: Number, default: 0 },
+  userId: { type: String }, // ✅ fix this too
+  expiresAt: { type: Date }, // ✅ REQUIRED FIX
+});
 
-const Url = mongoose.model<IUrl>("Url" , urlSchema);
+const Url = mongoose.model<IUrl>("Url", urlSchema);
 
 export default Url;

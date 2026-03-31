@@ -82,14 +82,14 @@ export const createShortUrl = async (
     const newUrl = await Url.create({
       originalUrl,
       shortCode,
-      expiresAt: expiryDate,
+      ...(expiryDate && { expiresAt: expiryDate }),
     });
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
 
     res.status(201).json({
       message: "Short URL created successfully",
-      shortUrl: `${baseUrl}/${newUrl.shortCode}`,
+      shortUrl: `${baseUrl}/${newUrl.shortCode.toString()}`,
       expiresAt: expiryDate || null,
     });
   } catch (error) {
