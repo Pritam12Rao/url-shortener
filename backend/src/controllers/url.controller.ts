@@ -82,7 +82,7 @@ export const createShortUrl = async (
     const newUrl = await Url.create({
       originalUrl,
       shortCode,
-      expiresAt: expiryDate, // 🔥 store expiry
+      expiresAt: expiryDate,
     });
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
